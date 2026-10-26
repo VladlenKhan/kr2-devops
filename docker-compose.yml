@@ -1,0 +1,39 @@
+services:
+  app:
+    build: .
+    image: kr2-app:1.0
+    restart: unless-stopped
+    env_file: .env                  # REDIS_PASSWORD (секрет) — только из .env на сервере
+    environment:
+      REDIS_HOST: redis             # обращение к Redis по имени сервиса
+      STUDENT: Khan
+    ports:
+      - "127.0.0.1:8003:8003"       # только loopback сервера
+    networks:
+      - backend
+    depends_on:
+      redis:
+        condition: service_healthy  # старт только после PONG от Redis
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    env_file: .env                  # пароль нужен и проверке готовности внутри контейнера
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is not set}"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    # порт 6379 не публикуется
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  redis_data:
